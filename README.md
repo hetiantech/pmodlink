@@ -1,25 +1,31 @@
 # pmodlink
 
-**A Lua-scripted industrial IoT gateway.** Connects Modbus, OPC DA/UA, MQTT and HTTP —
-custom protocols and custom logic at the edge.
+**An industrial gateway for Windows that you script in Lua.** Collect data from Modbus
+devices and OPC DA servers, publish the same tags over OPC DA and OPC UA, forward them
+upstream over MQTT, and implement everything else in Lua scripts that run inside the
+gateway.
 
-pmodlink (ModLink Gateway) is a Windows application for connecting shop-floor equipment
-to upper-level systems. It acquires data from Modbus TCP/RTU devices and OPC DA servers,
-republishes it over OPC DA and OPC UA, forwards it upstream over MQTT, and adapts to
-everything else through Lua scripts that run inside the gateway.
+![Platform](https://img.shields.io/badge/platform-Windows%207%20SP1%2B%20x86-0078d4)
+![Version](https://img.shields.io/badge/version-1.4.1-2b7a4b)
+![License](https://img.shields.io/badge/license-commercial-lightgrey)
 
-> **Status: pre-release.** Features and license terms may change before the first
+![pmodlink dashboard](docs/screenshots/dashboard.png)
+
+> **Status: pre-release (1.4.1).** Features and license terms may change before the first
 > production release.
 
 ---
 
 ## Contents
 
-- [Editions](#editions)
+- [What it does](#what-it-does)
 - [Capabilities](#capabilities)
+- [Screenshots](#screenshots)
+- [Architecture](#architecture)
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Activation](#activation)
+- [Building from source](#building-from-source)
 - [Documentation](#documentation)
 - [Support](#support)
 - [License](#license)
@@ -27,23 +33,26 @@ everything else through Lua scripts that run inside the gateway.
 
 ---
 
-## Editions
+## What it does
 
-The table below summarises the licensed scope of each edition. The
-[commercial license agreement](LICENSE.txt) is authoritative.
+Shop-floor equipment speaks Modbus, OPC DA, serial and one-off protocols. The systems
+above it want OPC UA, OPC DA, MQTT or a database. pmodlink sits in between and keeps the
+data honest on the way through:
 
-|                        | Core                                  | Professional                                                                 |
-| ---------------------- | ------------------------------------- | ---------------------------------------------------------------------------- |
-| Tags                   | up to 5,000                           | up to 50,000                                                                 |
-| Acquisition            | single acquisition host               | up to 10 parallel acquisition instances                                      |
-| OPC UA server          | 1 instance                            | 1 instance, Basic256Sha256 and application instance certificate management    |
-| Lua scripting          | yes                                   | yes                                                                          |
-| History archiving      | —                                     | retention policies and backfill                                              |
-| Windows service mode   | —                                     | yes                                                                          |
-| Version updates        | perpetual use of the licensed version | 1 year of upgrades from the issue date                                       |
+```text
+   Modbus TCP / RTU ──┐
+   OPC DA servers   ──┤                    ┌─────────────→  OPC DA clients
+   serial / TCP     ──┼──→  pmodlink  ─────┼─────────────→  OPC UA clients
+   (via Lua)        ──┘     tag engine     ├─────────────→  MQTT uplink
+                            + history      └─────────────→  Lua scripts, alarms
+                            + Lua                           history database
+```
 
-Without a license key the application still runs, in an unlicensed mode with reduced
-capacity. The limits currently in force are shown on the **License** page.
+Every tag carries a value, a quality and the moment it was acquired. When a device stops
+answering, its tags keep their last known value but take a communication-failure quality,
+so an operator sees stale data instead of a number that appears to be refreshing — and
+OPC UA clients receive the matching status code with the original source timestamp. The
+quality returns to good automatically once the device responds again.
 
 ## Capabilities
 
@@ -54,10 +63,9 @@ capacity. The limits currently in force are shown on the **License** page.
 - Per-tag configuration: register type (coil, discrete input, holding register, input
   register), data type, byte order, scaling factor, engineering unit, and whether the tag
   may be written to.
-- Per-tag quality. When communication with a device fails, its tags are marked with a
-  communication-failure quality and keep their last known value, so an operator sees
-  stale data rather than a value that appears to be refreshing. Quality returns to good
-  automatically once the device responds again.
+- Per-tag quality, as described above.
+- A device dialog for test reads, and a browser for picking items from a live OPC DA
+  server rather than typing item IDs.
 
 ### Serving and forwarding
 
@@ -65,16 +73,21 @@ capacity. The limits currently in force are shown on the **License** page.
   identity, update rate, group limit, asynchronous mode and DCOM support.
 - **OPC UA server** (default port 4840) — tag quality is reported to clients as OPC UA
   status codes, and the source timestamp is preserved from the moment of acquisition so
-  that a client can distinguish a live value from a stale one. While a device is
-  unavailable, the last usable value is served together with a
-  no-communication/last-usable-value status.
+  that a client can distinguish a live value from a stale one. Three endpoints are offered
+  — `None`, `Basic256Sha256_Sign` and `Basic256Sha256_SignAndEncrypt` — with anonymous,
+  username/password and client-certificate identities. The server certificate is
+  self-signed on first use into `data/pki/`; encrypted connections require the client's
+  own certificate under `data/pki/trusted/certs/`, and a rejected client certificate is
+  filed under `data/pki/rejected/` for inspection. Users and roles are managed on the
+  **OPC UA** page: administrators may write tags, users and anonymous clients are
+  read-only.
 - **MQTT uplink** — publish tag values to a broker, with automatic reconnect.
 
 ### History
 
 - Periodic sampling of tag values into a local database, with a configurable sampling
   interval and retention period.
-- Views for browsing and querying archived values.
+- Views for browsing and querying archived values, with trend chart and CSV export.
 
 ### Scripting
 
@@ -92,34 +105,62 @@ default and is enabled explicitly, with port and target allow-lists and timeout 
 - Runs as a desktop application or as a Windows service, with optional run at startup.
 - Logging with a master on/off switch, selectable severity levels, optional log file
   output, an in-application log viewer and log export.
+- License state, tag capacity and server status at a glance on the **Dashboard**.
 
 ### User interface
 
 Dashboard, Devices, Tags, Monitor, History, Log, Lua, OPC DA, OPC UA, Browse, License and
 Settings. The interface is available in English and Chinese.
 
+## Screenshots
+
+| | |
+|:--:|:--:|
+| ![Devices](docs/screenshots/devices.png)<br>*Devices* | ![Tags](docs/screenshots/tags.png)<br>*Tags* |
+| ![Monitor](docs/screenshots/monitor.png)<br>*Monitor — live values with per-tag quality* | ![History](docs/screenshots/history.png)<br>*History — trends and archived values* |
+| ![OPC DA server](docs/screenshots/opcda-server.png)<br>*OPC DA server* | ![OPC UA server](docs/screenshots/opcua-server.png)<br>*OPC UA — certificates and user accounts* |
+| ![Lua editor](docs/screenshots/lua-editor.png)<br>*Lua scripting* | ![License](docs/screenshots/license.png)<br>*License and activation* |
+
+## Architecture
+
+| Part | Role |
+| --- | --- |
+| `modlink/` — this Python package | The application: wxPython user interface, tag engine and quality model, polling schedulers (Modbus TCP/RTU, OPC DA client via pywin32), OPC UA server, MQTT uplink, history recorder, Lua host |
+| `modlink_da.dll` — Rust, in `rust/` | Native OPC DA COM server (`modlink.OPCDAServer.1`, in-process and out-of-process activation) and offline license validation |
+| SQLite database, `data/modlink.db` | Devices, tags, history samples, OPC UA users, settings |
+| Lua 5.4 via `lupa` | User scripts, sandboxed, with optional serial/TCP access |
+| `config/default.toml` | Annotated defaults; the effective configuration is read from it plus the database |
+
+Everything is 32-bit, so the gateway can be deployed on old Windows 7 SP1 equipment as
+well as on current Windows. The application is packaged with Nuitka into a standalone
+directory (`dist\__main__.dist\`) that needs no Python installation on the target machine.
+
 ## Requirements
 
-- Windows 7 SP1 or later. pmodlink is a 32-bit application.
+- **Windows 7 SP1 or later.** pmodlink is a 32-bit application.
 - Administrator rights to install.
-- For OPC DA connectivity, the **OPC Core Components Redistributable (x86)** from the
-  OPC Foundation must be installed on the machine. The OPC Core Components *SDK* is
-  **not** sufficient — it does not contain the Automation Wrapper. This third-party
-  runtime is not included with pmodlink.
+- For OPC DA connectivity, the **OPC Core Components Redistributable (x86)** from the OPC
+  Foundation must be installed on the machine. The OPC Core Components *SDK* is **not**
+  sufficient — it does not contain the Automation Wrapper. This third-party runtime is not
+  included with pmodlink.
 - A license key for licensed operation.
+- When rebuilding from source: on Windows 7 SP1 the bundled `cryptography` is pinned to
+  42.0.8. From 43.0.3 on, its native module statically imports
+  `bcryptprimitives!ProcessPrng`, an export Windows 8 introduced, so it cannot be loaded on
+  Windows 7. Do not upgrade that package.
 
 ## Installation
 
 1. If OPC DA connectivity is required, install the OPC Core Components Redistributable
    (x86) first.
-2. Run the pmodlink installer. Administrator rights are required; the default
-   installation directory is under `Program Files`.
+2. Run the pmodlink installer. Administrator rights are required; the default installation
+   directory is under `Program Files`.
 3. Start pmodlink, configure your devices and tags, then activate it on the **License**
    page.
 
 The installation and deployment guide ([INSTALL.md](INSTALL.md)) covers the OPC Core
-Components procedure in detail, together with Windows service installation, DCOM setup
-for remote OPC DA access, and troubleshooting.
+Components procedure in detail, together with Windows service installation, DCOM setup for
+remote OPC DA access, and troubleshooting.
 
 ## Activation
 
@@ -128,14 +169,48 @@ code for the computer; supply that code when ordering to receive a license key, 
 the key on the same page. No internet connection is required, and no operational or
 personal data is transmitted as part of activation.
 
+Without a license key the application still runs, in an unlicensed mode with reduced
+capacity. pmodlink is licensed per machine under a perpetual license, for up to 10,000
+tags on the licensed machine; the limits currently in force are shown on the **License**
+page. The [commercial license agreement](LICENSE.txt) is authoritative.
+
 If a hardware change alters the machine code — a motherboard or network interface
 replacement, for example — the application will ask to be re-activated. A replacement key
 for the same licensed machine is issued at no charge.
 
+## Building from source
+
+The build targets **32-bit Python 3.8** (the reference environment is `C:\Python38-32`).
+
+```bat
+:: dependencies, then run from source
+pip install -r requirements.txt
+pip install paho-mqtt
+python -m modlink
+```
+
+The native DLL is built separately with the Rust toolchain, for the 32-bit GNU target:
+
+```bat
+cd rust
+cargo build --release --target i686-pc-windows-gnu -p modlink-da
+copy target\i686-pc-windows-gnu\release\modlink_da.dll ..\modlink_da.dll
+```
+
+Then build the standalone distribution — `build.bat` runs Nuitka and copies the OPC UA
+runtime packages into `dist\__main__.dist\`:
+
+```bat
+build.bat
+```
+
+`install.iss` packages that directory with Inno Setup 6 into
+`Output\pmodlink-setup-<version>.exe`.
+
 ## Documentation
 
-- **[INSTALL.md](INSTALL.md)** — installation, OPC Core Components, Windows service,
-  DCOM and deployment.
+- **[INSTALL.md](INSTALL.md)** — installation, OPC Core Components, Windows service, DCOM
+  and deployment.
 - **Lua scripting reference** — built into the application. Open it with the **Help**
   button on the Lua page; it is also shipped as an offline manual.
 
@@ -144,7 +219,7 @@ Both are currently written in Chinese.
 ## Support
 
 - Licensing, sales and upgrades: **support@pmodlink.com**
-- Product website: **https://www.pmodlink.com/**
+- Product website: **https://pmodlink.com/**
 
 ## License
 
@@ -160,8 +235,8 @@ software to provide a hosted or managed service to third parties are not permitt
 ## Safety notice
 
 This software is intended for industrial data acquisition, monitoring and integration.
-It is **not** designed, certified or intended for use in the control of machinery where
-a malfunction could cause injury or death, in safety-instrumented or emergency shutdown
+It is **not** designed, certified or intended for use in the control of machinery where a
+malfunction could cause injury or death, in safety-instrumented or emergency shutdown
 systems, in medical devices, or in any application requiring functional-safety
 certification.
 
