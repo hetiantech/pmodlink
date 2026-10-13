@@ -138,6 +138,7 @@ directory (`dist\__main__.dist\`) that needs no Python installation on the targe
 ## Requirements
 
 - **Windows 7 SP1 or later.** pmodlink is a 32-bit application.
+- Install KB2999226
 - Administrator rights to install.
 - For OPC DA connectivity, the **OPC Core Components Redistributable (x86)** from the OPC
   Foundation must be installed on the machine. The OPC Core Components *SDK* is **not**
