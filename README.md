@@ -25,7 +25,6 @@ gateway.
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Activation](#activation)
-- [Building from source](#building-from-source)
 - [Documentation](#documentation)
 - [Support](#support)
 - [License](#license)
@@ -137,26 +136,35 @@ directory (`dist\__main__.dist\`) that needs no Python installation on the targe
 
 ## Requirements
 
-- **Windows 7 SP1 or later.** pmodlink is a 32-bit application.
-- Install KB2999226
+- **Windows 7 SP1 or later.** pmodlink is a 32-bit application and runs on 64-bit Windows.
+  Service Pack 1 is a hard requirement — Windows 7 RTM is not supported.
+- **On Windows 7 SP1, install KB2999226 (Universal C Runtime) before installing pmodlink.**
+  The application imports the Universal C Runtime, so without this update it fails to start
+  with a missing `api-ms-win-crt-*.dll` / `ucrtbase.dll` message. Windows 8.1 and later
+  include it; on Windows 7 it comes from Windows Update or the Microsoft Update Catalog.
+  [INSTALL.md](INSTALL.md) lists it in the pre-installation checklist.
+- **No Visual C++ redistributable is needed** — the VC runtime DLLs (`vcruntime140.dll`,
+  `msvcp140.dll`, `mfc140u.dll`) ship inside the application directory.
 - Administrator rights to install.
 - For OPC DA connectivity, the **OPC Core Components Redistributable (x86)** from the OPC
   Foundation must be installed on the machine. The OPC Core Components *SDK* is **not**
   sufficient — it does not contain the Automation Wrapper. This third-party runtime is not
   included with pmodlink.
 - A license key for licensed operation.
-- When rebuilding from source: on Windows 7 SP1 the bundled `cryptography` is pinned to
-  42.0.8. From 43.0.3 on, its native module statically imports
-  `bcryptprimitives!ProcessPrng`, an export Windows 8 introduced, so it cannot be loaded on
-  Windows 7. Do not upgrade that package.
+
+> On Windows 7 the shipped `cryptography` 42.0.8 is the only usable version: from 43.0.3
+> on its native module statically imports `bcryptprimitives!ProcessPrng`, an export that
+> Windows 8 introduced, so a newer build cannot be loaded there.
 
 ## Installation
 
-1. If OPC DA connectivity is required, install the OPC Core Components Redistributable
+1. On Windows 7 SP1, install **KB2999226** (Universal C Runtime) first — see
+   [Requirements](#requirements).
+2. If OPC DA connectivity is required, install the OPC Core Components Redistributable
    (x86) first.
-2. Run the pmodlink installer. Administrator rights are required; the default installation
+3. Run the pmodlink installer. Administrator rights are required; the default installation
    directory is under `Program Files`.
-3. Start pmodlink, configure your devices and tags, then activate it on the **License**
+4. Start pmodlink, configure your devices and tags, then activate it on the **License**
    page.
 
 The installation and deployment guide ([INSTALL.md](INSTALL.md)) covers the OPC Core
@@ -179,43 +187,15 @@ If a hardware change alters the machine code — a motherboard or network interf
 replacement, for example — the application will ask to be re-activated. A replacement key
 for the same licensed machine is issued at no charge.
 
-## Building from source
-
-The build targets **32-bit Python 3.8** (the reference environment is `C:\Python38-32`).
-
-```bat
-:: dependencies, then run from source
-pip install -r requirements.txt
-pip install paho-mqtt
-python -m modlink
-```
-
-The native DLL is built separately with the Rust toolchain, for the 32-bit GNU target:
-
-```bat
-cd rust
-cargo build --release --target i686-pc-windows-gnu -p modlink-da
-copy target\i686-pc-windows-gnu\release\modlink_da.dll ..\modlink_da.dll
-```
-
-Then build the standalone distribution — `build.bat` runs Nuitka and copies the OPC UA
-runtime packages into `dist\__main__.dist\`:
-
-```bat
-build.bat
-```
-
-`install.iss` packages that directory with Inno Setup 6 into
-`Output\pmodlink-setup-<version>.exe`.
-
 ## Documentation
 
-- **[INSTALL.md](INSTALL.md)** — installation, OPC Core Components, Windows service, DCOM
-  and deployment.
+- **[INSTALL.md](INSTALL.md)** — system requirements, the OPC Core Components
+  Redistributable, remote OPC DA over DCOM, upgrading and backup, a troubleshooting table
+  and a pre-delivery checklist.
 - **Lua scripting reference** — built into the application. Open it with the **Help**
   button on the Lua page; it is also shipped as an offline manual.
 
-Both are currently written in Chinese.
+INSTALL.md is written in English; the Lua scripting reference is currently in Chinese.
 
 ## Support
 
